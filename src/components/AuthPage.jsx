@@ -1,11 +1,9 @@
+// src/pages/AuthPage.jsx
 import React, { useState } from "react";
 import { useDispatch } from "react-redux";
 import { setUser } from "../redux/sliceClient";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-} from "firebase/auth";
-import { ref, set as dbSet, get } from "firebase/database";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { ref, set, get } from "firebase/database";
 import { auth, rtdb } from "../firebase/config";
 
 export const AuthPage = () => {
@@ -18,61 +16,50 @@ export const AuthPage = () => {
   const dispatch = useDispatch();
 
   const clearFields = () => {
-    setEmail("");
-    setPassword("");
-    setRole("user");
-    setError("");
+    setEmail(""); setPassword(""); setRole("user"); setError("");
   };
 
   const handleRegister = async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const userCred = await createUserWithEmailAndPassword(auth, email, password);
       const uid = userCred.user.uid;
-      await dbSet(ref(rtdb, `users/${uid}`), { email, role });
 
-      dispatch(setUser({ uid, email, role }));
+      // Сохраняем email и роль в Realtime Database
+      await set(ref(rtdb, `users/${uid}`), { email, role });
+
+      // Читаем роль обратно из базы, чтобы точно передать в Redux
+      const roleSnap = await get(ref(rtdb, `users/${uid}/role`));
+      const savedRole = roleSnap.exists() ? roleSnap.val() : "user";
+
+      dispatch(setUser({ uid, email, role: savedRole }));
+      console.log("Регистрация успешна, роль:", savedRole);
       clearFields();
     } catch (err) {
-      setError(handleFirebaseError(err.code));
+      console.error("Ошибка регистрации:", err);
+      setError("Ошибка регистрации: " + (err.code || err.message));
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogin = async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const userCred = await signInWithEmailAndPassword(auth, email, password);
       const uid = userCred.user.uid;
-      const roleSnap = await get(ref(rtdb, `users/${uid}/role`));
-      const userRole = roleSnap.exists() ? roleSnap.val() : "user";
 
-      dispatch(setUser({ uid, email, role: userRole }));
+      const roleSnap = await get(ref(rtdb, `users/${uid}/role`));
+      const savedRole = roleSnap.exists() ? roleSnap.val() : "user";
+
+      dispatch(setUser({ uid, email, role: savedRole }));
+      console.log("Вход успешен, роль:", savedRole);
       clearFields();
     } catch (err) {
-      setError(handleFirebaseError(err.code));
+      console.error("Ошибка входа:", err);
+      setError("Ошибка входа: " + (err.code || err.message));
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleFirebaseError = (code) => {
-    switch (code) {
-      case "auth/user-not-found":
-        return "Пользователь не найден.";
-      case "auth/wrong-password":
-        return "Неверный пароль.";
-      case "auth/email-already-in-use":
-        return "Такой email уже используется.";
-      case "auth/invalid-email":
-        return "Неверный формат email.";
-      case "auth/weak-password":
-        return "Слишком слабый пароль (минимум 6 символов).";
-      default:
-        return "Произошла ошибка. Попробуйте ещё раз.";
     }
   };
 
@@ -115,35 +102,29 @@ export const AuthPage = () => {
         </select>
       )}
 
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={mode === "register" ? handleRegister : handleLogin}
-          className={`w-full bg-blue-600 text-white py-2 rounded transition ${
-            loading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"
-          }`}
-          disabled={loading}
-        >
-          {loading ? "Загрузка..." : mode === "register" ? "Зарегистрироваться" : "Войти"}
-        </button>
-      </div>
+      <button
+        onClick={mode === "register" ? handleRegister : handleLogin}
+        className={`w-full bg-blue-600 text-white py-2 rounded mb-4 ${
+          loading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"
+        }`}
+        disabled={loading}
+      >
+        {loading ? "Загрузка..." : mode === "register" ? "Зарегистрироваться" : "Войти"}
+      </button>
 
-      <div className="text-center">
-        <p className="text-sm text-gray-600">
-          {mode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}{" "}
-          <button
-            className="text-blue-600 hover:underline"
-            onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
-              setError("");
-            }}
-          >
-            {mode === "login" ? "Зарегистрироваться" : "Войти"}
-          </button>
-        </p>
-      </div>
+      <p className="text-center text-sm text-gray-600">
+        {mode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}{" "}
+        <button
+          className="text-blue-600 hover:underline"
+          onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
+        >
+          {mode === "login" ? "Зарегистрироваться" : "Войти"}
+        </button>
+      </p>
     </div>
   );
 };
+
 
 // export default AuthPage;
 // import React, { useState } from "react";
